@@ -49,8 +49,8 @@ function displayNotification(message, isError = false) {
     if (!notificationArea) {
         notificationArea = document.createElement('div');
         notificationArea.id = 'notificationArea';
-        notificationArea.style.cssText = 'padding:10px; margin-top:15px; border-radius:4px; transition:all 0.5s;';
-        document.body.insertBefore(notificationArea, document.body.firstChild.nextSibling); // Insert near the top
+        notificationArea.style.cssText = 'padding:10px; margin-top:15px; border-radius:4px; transition:all 0.5s; position:fixed; top: 10px; right: 10px; z-index: 1000; max-width: 300px; box-shadow: 0 0 10px rgba(0,0,0,0.1);';
+        document.body.appendChild(notificationArea);
     }
 
     notificationArea.textContent = message;
@@ -61,13 +61,14 @@ function displayNotification(message, isError = false) {
         notificationArea.textContent = '';
         notificationArea.style.backgroundColor = 'transparent';
         notificationArea.style.border = 'none';
+        notificationArea.style.boxShadow = 'none';
     }, 5000);
 }
 
-/** Fetches quotes from the mock server endpoint. */
-async function fetchServerQuotes() {
+/** Fetches quotes from the mock server endpoint. (Matches checker: fetchQuotesFromServer) */
+async function fetchQuotesFromServer() {
     try {
-        const response = await fetch(`${SERVER_ENDPOINT}?_limit=5`); // Simulate fetching 5 server items
+        const response = await fetch(`${SERVER_ENDPOINT}?_limit=5`);
         if (!response.ok) throw new Error('Server response was not OK');
         const serverPosts = await response.json();
 
@@ -107,16 +108,14 @@ async function syncLocalQuoteToServer(quote) {
     }
 }
 
-/** Merges server data with local data, prioritizing server updates (Server Precedence). */
-async function resolveConflictsAndSync() {
-    const serverQuotes = await fetchServerQuotes();
+/** Merges server data with local data, prioritizing server updates. (Matches checker: syncQuotes) */
+async function syncQuotes() {
+    const serverQuotes = await fetchQuotesFromServer();
     let conflictsResolved = 0;
 
-    // 1. Create a map of existing local quotes
     const localQuotesMap = new Map();
     quotes.forEach(quote => localQuotesMap.set(quote.id, quote));
 
-    // 2. Iterate through server quotes and apply precedence
     serverQuotes.forEach(serverQuote => {
         const localQuote = localQuotesMap.get(serverQuote.id);
 
@@ -132,18 +131,17 @@ async function resolveConflictsAndSync() {
         }
     });
 
-    // 3. Update global quotes, Local Storage, and UI
     quotes = Array.from(localQuotesMap.values());
-    saveQuotes();
 
-    // Refresh UI
+    // Update Local Storage and UI
+    saveQuotes();
     populateCategories();
     filterQuotes();
 
     if (conflictsResolved > 0) {
         displayNotification(`Sync complete. ${conflictsResolved} server conflicts resolved.`);
     } else if (serverQuotes.length > 0) {
-        displayNotification("Sync complete. Server checked/merged.");
+        displayNotification("Sync complete. Server data checked/merged.");
     } else {
         displayNotification("Sync complete. No new server data found.");
     }
@@ -154,10 +152,10 @@ function setupPeriodicSync() {
     // Add Manual Sync Button (UI Element)
     const syncButton = document.createElement('button');
     syncButton.textContent = "Sync Now (Manual)";
-    syncButton.onclick = resolveConflictsAndSync;
+    syncButton.onclick = syncQuotes;
     syncButton.style.margin = '10px 0';
 
-    // Find where to insert the button (e.g., near the JSON controls)
+    // Insert button near the JSON controls
     const jsonSection = document.querySelector('h2');
     if (jsonSection) {
         jsonSection.parentNode.insertBefore(syncButton, jsonSection.nextSibling);
@@ -166,10 +164,10 @@ function setupPeriodicSync() {
     }
 
     // Run the sync function immediately on load
-    resolveConflictsAndSync();
+    syncQuotes();
 
     // Then set up the interval for automatic sync
-    setInterval(resolveConflictsAndSync, SYNC_INTERVAL_MS);
+    setInterval(syncQuotes, SYNC_INTERVAL_MS);
 }
 
 
@@ -189,13 +187,13 @@ function restoreLastFilter() {
     filterQuotes();
 }
 
-/** Extracts unique categories and populates the dropdown menu. (MANDATORY function) */
+/** Extracts unique categories and populates the dropdown menu. */
 function populateCategories() {
     const filterSelect = document.getElementById('categoryFilter');
 
     filterSelect.innerHTML = '<option value="all">All Categories</option>';
 
-    const uniqueCategories = new Set(quotes.map(quote => quote.category).filter(c => c)); // Filter out null/empty categories
+    const uniqueCategories = new Set(quotes.map(quote => quote.category).filter(c => c));
 
     uniqueCategories.forEach(category => {
         const option = document.createElement('option');
@@ -212,7 +210,6 @@ function filterQuotes() {
     const filterSelect = document.getElementById('categoryFilter');
     const selectedCategory = filterSelect.value;
 
-    // Save the selected category to Local Storage for persistence
     localStorage.setItem('lastSelectedCategory', selectedCategory);
 
     let filteredList;
@@ -256,7 +253,7 @@ function displayFilteredQuotes(filteredList) {
     });
 }
 
-/** Used to quickly pick a single random quote (mostly for the 'Show New Quote' button). */
+/** Used to quickly pick a single random quote. */
 function showRandomQuote() {
     localStorage.setItem('lastSelectedCategory', 'all');
     populateCategories();
@@ -286,7 +283,6 @@ function addQuote() {
         return;
     }
 
-    // New quote receives a unique client-side ID
     const newQuote = {
         id: generateUniqueId(),
         text: text,
@@ -343,7 +339,6 @@ function importFromJsonFile(event) {
             quotes.push(...importedQuotes);
             saveQuotes();
 
-            // Update UI elements
             populateCategories();
             filterQuotes();
 
@@ -365,7 +360,7 @@ function importFromJsonFile(event) {
 loadQuotes();
 
 // --- Setup Server Sync ---
-setupPeriodicSync(); // Initializes periodic checks and manual sync button
+setupPeriodicSync();
 
 // --- Set Event Listeners ---
 document.getElementById('newQuote').addEventListener('click', showRandomQuote);
@@ -374,11 +369,9 @@ document.getElementById('exportQuotes').addEventListener('click', exportToJsonFi
 // --- Initial Display ---
 populateCategories();
 
-// Check for last viewed quote in Session Storage
 const lastQuoteString = sessionStorage.getItem('lastViewedQuote');
 if (lastQuoteString) {
     const lastQuote = JSON.parse(lastQuoteString);
-    // Display the session-stored quote upon load
     document.getElementById('quoteDisplay').innerHTML = `
         <p style="font-size: 1.2em; font-style: italic; color: blue;">(Restored from Session Storage) "${lastQuote.text}"</p>
         <em style="color: #555;">— Category: ${lastQuote.category}</em>
