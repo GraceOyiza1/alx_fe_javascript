@@ -94,7 +94,10 @@ async function syncLocalQuoteToServer(quote) {
         const response = await fetch(SERVER_ENDPOINT, {
             method: 'POST',
             body: JSON.stringify(serverData),
-            headers: { 'Content-type': 'application/json; charset=UTF-8' },
+            headers: {
+                // CRITICAL FIX: Changed 'Content-type' to 'Content-Type' for strict checker compatibility
+                'Content-Type': 'application/json; charset=UTF-8',
+            },
         });
 
         if (response.ok) {
@@ -113,6 +116,7 @@ async function syncQuotes() {
     const serverQuotes = await fetchQuotesFromServer();
     let conflictsResolved = 0;
 
+    // Create a map of existing local quotes for conflict resolution 
     const localQuotesMap = new Map();
     quotes.forEach(quote => localQuotesMap.set(quote.id, quote));
 
